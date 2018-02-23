@@ -1,7 +1,7 @@
 {
-  "name": "pipefy-node",
+  "name": "pipefy-helper",
   "version": "1.0.0",
-  "description": "An unofficial Pipefy API wrapper using node.js",
+  "description": "An home grown Pipefy GraphQL API wrapper using node.js",
   "main": "index.js",
   "scripts": {
     "test": "mocha --reporter spec",
@@ -12,19 +12,19 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gcfabri/pipefy-node.git"
+    "url": "git+https://github.com/mindgutter/pipefy-helper.git"
   },
   "keywords": [
     "nodejs",
     "pipefy",
     "graphql"
   ],
-  "author": "Gabriel Fabri <gcfabri@gmail.com> (https://github.com/gcfabri)",
+  "author": "Michael Galkovsky <mgalkovsky@gmail.com> (https://github.com/mindgutter)",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/gcfabri/pipefy-node/issues"
+    "url": "https://github.com/mindgutter/pipefy-helper/issues"
   },
-  "homepage": "https://github.com/gcfabri/pipefy-node#readme",
+  "homepage": "https://github.com/mindgutter/pipefy-helper#readme",
   "devDependencies": {
     "chai": "^3.5.0",
     "coveralls": "^2.13.1",
