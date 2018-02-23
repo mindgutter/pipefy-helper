@@ -1,7 +1,7 @@
 'use strict';
 
 var TEST_PIPEFY_TOKEN =
-  'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJ1c2VyIjp7ImlkIjo4MjI3MSwiZW1haWwiOiJnY2ZhYnJpQGdtYWlsLmNvbSIsImFwcGxpY2F0aW9uIjozOTg1fX0.Iri2Uu8l-3qBVr1jt8yTl7PJqrXD_eHnyyPcyg5LlCzKv-K3c0pAFRJtC5TQHeIy9m5NyzvmfJDpA6sjDldoIg';
+  'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJ1c2VyIjp7ImlkIjo2NzgwNywiZW1haWwiOiJtaWNoYWVsLmdhbGtvdnNreUBiZS5pYm0uY29tIiwiYXBwbGljYXRpb24iOjQ1NTV9fQ.iEKxZWZlMjdKUk3D_u5pfE2ienUaCQq3Tkv3wqgGSTc9RsR4XlsdieuojCifOBQXsXnizhzk3cBpFAFhUrycYg';
 
 var expect = require('chai').expect;
 var pipefy = require('../index')({
