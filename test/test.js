@@ -91,9 +91,9 @@ describe('Pipefy', function() {
         child_must_exist_to_finish_parent: false,
         all_children_must_be_done_to_finish_parent: true,
         all_children_must_be_done_to_move_parent: true,
-        can_create_connected_cards: false,
-        can_search_connected_cards: true,
-        can_connect_multiple_cards: true
+        can_create_new_items: false,
+        can_connect_existing_items: true,
+        can_connect_multiple_items: true
       }).then(function(result) {
         var parsedResult = JSON.parse(result);
         PIPE_RELATION_ID = parsedResult.data.createPipeRelation.pipe_relation.id;

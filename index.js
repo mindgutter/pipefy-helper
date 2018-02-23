@@ -27,6 +27,13 @@ var log = require('loglevel');
 
 function Pipefy(config) {
 
+  const client = require('graphql-client') ({
+      url: 'https://app.pipefy.com/queries',
+      headers: {
+        Authorization: 'Bearer ' + config.accessToken
+      }
+  });
+
   if(!config) {
     console.error(`No 'config' parameter specified.`);
   } else if(!config.accessToken) {
@@ -260,6 +267,19 @@ function Pipefy(config) {
     });
   };
 
+  const CREATE_ORGANIZATION_QUERY =  `mutation createOrganization($industry:String, $name:String){
+        createOrganization(
+            input: {
+            industry: $industry
+            name: $name
+        }
+    ) {
+            organization {
+                id
+                name
+            }
+        }
+    }`
   /**
    * Mutation to create a organization, in case of success a query is returned.
    * @function
@@ -269,19 +289,10 @@ function Pipefy(config) {
    * @returns A promise with the response body
    */
   this.createOrganization = function(params) {
-    return rp({
-      method: 'POST',
-      url: baseUrl,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': bearerToken
-      },
-      body: `{  \"query\": \"mutation { createOrganization(input: {industry: \\"${params.industry}\\", name: \\"${params.name}\\"}){ organization{ id, name } } }\"}`
-    }, function(error, response, body) {
-      log.debug('Status:', response.statusCode);
-      log.debug('Headers:', JSON.stringify(response.headers));
-      log.debug('Response:', body);
-    });
+      return client.query(CREATE_ORGANIZATION_QUERY, params, function(req, res, body) {
+          log.debug('Status:', res.status);
+          log.debug('Response:', body);
+      });
   };
 
   /**
@@ -923,17 +934,8 @@ function Pipefy(config) {
    * @returns A promise with the response body
    */
   this.createPipeRelation = function(params) {
-    return rp({
-      method: 'POST',
-      url: baseUrl,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': bearerToken
-      },
-      body: `{  \"query\": \"mutation { createPipeRelation(input: { parent_id: ${params.parent_id}, child_id: ${params.child_id}, name: \\"${params.name}\\", child_must_exist_to_move_parent: ${params.child_must_exist_to_move_parent}, child_must_exist_to_finish_parent: ${params.child_must_exist_to_finish_parent}, all_children_must_be_done_to_finish_parent: ${params.all_children_must_be_done_to_finish_parent}, all_children_must_be_done_to_move_parent: ${params.all_children_must_be_done_to_move_parent}, can_create_connected_cards: ${params.can_create_connected_cards}, can_search_connected_cards: ${params.can_search_connected_cards}, can_connect_multiple_cards: ${params.can_connect_multiple_cards} }) { pipe_relation { id, name, parent_id, child_id, can_create_connected_cards, can_search_connected_cards, can_connect_multiple_cards, child_must_exist_to_move_parent, child_must_exist_to_finish_parent, all_children_must_be_done_to_move_parent, all_children_must_be_done_to_finish_parent } } }\"}`
-    }, function(error, response, body) {
-      log.debug('Status:', response.statusCode);
-      log.debug('Headers:', JSON.stringify(response.headers));
+    return client.query(CREATE_PIPE_RELATION_QUERY, params, function(req, res, body) {
+      log.debug('Status:', res.status);
       log.debug('Response:', body);
     });
   };
