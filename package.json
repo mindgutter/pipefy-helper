@@ -1,15 +1,8 @@
 {
   "name": "pipefy-helper",
   "version": "1.0.0",
-  "description": "An home grown Pipefy GraphQL API wrapper using node.js",
+  "description": "An Pipefy GraphQL API wrapper using node.js",
   "main": "index.js",
-  "scripts": {
-    "test": "mocha --reporter spec",
-    "cover": "node_modules/istanbul/lib/cli.js cover node_modules/mocha/bin/_mocha -- -R spec test/*"
-  },
-  "engines": {
-    "node": ">=9.6.1"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/mindgutter/pipefy-helper.git"
@@ -29,12 +22,19 @@
     "chai": "^3.5.0",
     "coveralls": "^2.13.1",
     "istanbul": "^0.4.5",
-    "mocha": "^3.4.1"
+    "mocha": "^3.4.1",
+    "random-word": "^2.0.0"
   },
   "dependencies": {
     "loglevel": "^1.4.1",
     "request": "^2.81.0",
-    "request-promise": "^4.2.1",
     "graphql-client": "^2.0.1"
+  },
+  "scripts": {
+    "test": "mocha --reporter spec --timeout 10000",
+    "cover": "node_modules/istanbul/lib/cli.js cover node_modules/mocha/bin/_mocha -- -R spec test/*",
+    "engines": {
+      "node": ">=9.6.1"
+    }
   }
 }
