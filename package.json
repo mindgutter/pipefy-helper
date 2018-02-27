@@ -31,7 +31,7 @@
     "graphql-client": "^2.0.1"
   },
   "scripts": {
-    "test": "mocha --reporter spec --timeout 10000",
+    "test": "mocha --timeout 300000 --reporter spec ",
     "cover": "node_modules/istanbul/lib/cli.js cover node_modules/mocha/bin/_mocha -- -R spec test/*",
     "engines": {
       "node": ">=9.6.1"

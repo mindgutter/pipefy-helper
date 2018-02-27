@@ -22,10 +22,11 @@
 
 'use strict';
 
-var log = require('loglevel');
+const log = require('loglevel');
 
 
 function Pipefy(config) {
+
     if (!config) {
         console.error(`No 'config' parameter specified.`);
     } else if (!config.accessToken) {
@@ -250,6 +251,10 @@ function Pipefy(config) {
     current_phase {
       id
       name
+      cards_can_be_moved_to_phases{
+        id
+        name
+      }
     }
     pipe {
       id
@@ -273,9 +278,7 @@ function Pipefy(config) {
       }
     }
   }
-}
-
-`;
+}`;
     /**
      * Get a card by card id, with assignees, child relations, fields ...
      * @function
@@ -450,8 +453,8 @@ function Pipefy(config) {
      * @param {object} params.preferences
      * @param {boolean} params.public_form - Is the start form public
      * @param {boolean} params.public - It the pipe public
-     * @param {object} param.public_form_settings - Settings of the public form
-     * @param {string} title_field_id - Id of the title field
+     * @param {object} params.public_form_settings - Settings of the public form
+     * @param {string} params.title_field_id - Id of the title field
      * @param {boolean} params.only_admin_can_remove_cards - Only admin can remove cards
      * @param {boolean} params.only_assignees_can_edit_cards - Only assignees can edit cards
      * @returns A promise with the response body
@@ -936,10 +939,15 @@ function Pipefy(config) {
         return await client.query(DELETE_PIPE_RELATION_QUERY, {id: id});
     };
 
-    const CREATE_WEBHOOK_QUERY = `mutation CreateWebhook($actions: [String]!, $url:String!, $email:String, $headers:Json, $pipe_id:ID, $table_id:ID) {
+    const CREATE_WEBHOOK_QUERY = `mutation CreateWebhook($actions: [String]!, $name:String! $url:String!, $email:String, $headers:Json, $pipe_id:ID, $table_id:ID) {
   createWebhook(input: {actions: $actions, name: $name, url: $url, email: $email, headers: $headers, pipe_id: $pipe_id, table_id: $table_id}) {
     webhook {
       id
+      name
+      actions
+      url
+      email
+      headers
     }
   }
 }`;
@@ -947,7 +955,8 @@ function Pipefy(config) {
      * Mutation to create a webhook related to a pipe or table event.
      * @function
      * @param {object} params - The pipe relation new data
-     * @param {Array.} params.actions - The actions which trigger the webhook
+     * @param {Array.} params.actions - The actions which trigger the webhook - options are: card.create, card.done, card.expired, card.late, card.move, card.overdue
+     * @param {string} params.name - Webhook name
      * @param {string} params.url - Webhook url
      * @param {string=} params.email - email of creator
      * @param {json=} params.headers - Json formatted header values to include in webhook call
@@ -956,7 +965,11 @@ function Pipefy(config) {
      * @returns A promise with the response body
      */
     this.createWebhook = async function (params) {
-        return await client.query(CREATE_WEBHOOK_QUERY, params);
+        try {
+            return await client.query(CREATE_WEBHOOK_QUERY, params);
+        }catch (err){
+            log.debug(err);
+        }
     };
 
 
@@ -964,6 +977,11 @@ function Pipefy(config) {
   updateWebhook(input: {id: $id, actions: $actions, url: $url, email: $email, headers: $headers}) {
     webhook {
       id
+      name
+      actions
+      url
+      email
+      headers
     }
   }
 }`;
