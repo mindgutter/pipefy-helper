@@ -224,6 +224,11 @@ function Pipefy(config) {
           phase_field {
             id
           }
+          array_value
+        }
+        labels{
+            id
+            name
         }
       }
     }
@@ -248,6 +253,7 @@ function Pipefy(config) {
 
     const GET_CARD_BY_ID_QUERY = `query getCardById($id: ID!) {
   card(id: $id) {
+  
     current_phase {
       id
       name
@@ -276,6 +282,7 @@ function Pipefy(config) {
       phase_field {
         id
       }
+      array_value
     }
   }
 }`;
@@ -412,6 +419,24 @@ function Pipefy(config) {
   createPipe(input: {name: $name, organization_id: $organization_id, labels: $labels, members: $members, phases: $phases, preferences: $preferences, start_form_fields: $start_form_fields}) {
     pipe {
       id
+      cards_count
+      created_at
+      last_updated_by_card
+      phases {
+        id
+        name
+        cards_count
+        fields{
+           uuid
+           id
+           label
+        }
+      }
+      start_form_fields{
+        uuid
+        id
+        label
+      }
     }
   }
 }`;
@@ -685,6 +710,7 @@ function Pipefy(config) {
   createCard(input: {pipe_id: $pipe_id, phase_id: $phase_id, parent_ids: $parent_ids, assignee_ids: $assignee_ids, attachments: $attachments, due_date: $due_date, fields_attributes: $fields_attributes, label_ids: $label_ids, title: $title}) {
     card {
       id
+      title
     }
   }
 }`;
@@ -699,11 +725,56 @@ function Pipefy(config) {
      * @param {string} params.due_date - Date in string format
      * @param {Array.string} params.assignee_ids - An array with assignes ids numbers
      * @param {Array.string} params.label_ids - An array with labels ids numbers
+     * @param {Array.object} params.fields_attributes
+     * @param {string} params.attachments
      * @returns A promise with the response body
      */
     this.createCard = async function (params) {
         return await client.query(CREATE_CARD_QUERY, params);
     };
+
+    const CREATE_CARD_RELATION_QUERY = `mutation CreateCardRelation($childId: ID!, $parentId: ID!, $sourceId: ID!, $sourceType: String!) {
+  createCardRelation(input: {childId: $childId, parentId: $parentId, sourceId: $sourceId, sourceType: $sourceType}) {
+    cardRelation {
+      id
+    }
+  }
+}`;
+    /**
+     * The endpoint to create a card, in case of success a query is returned. When fields_attributes is passed as parameter, the field_value of first field_attribute replaces the card title.
+     * @function
+     * @param {object} params - The card new data
+     * @param {number} params.childId - The child card id
+     * @param {number} params.parentId - The parent card title
+     * @param {number} params.sourceId - The id of the pipe or table for the child card
+     * @param {string} params.sourceType - Type of relation either through a pipe connection or a connection field (PipeRelation, or Field)
+     * @returns A promise with the response body
+     */
+    this.createCardRelation = async function (params) {
+        return await client.query(CREATE_CARD_RELATION_QUERY, params);
+    };
+
+
+    const DELETE_CARD_RELATION_QUERY = `mutation DeleteCardRelation($id: ID!) {
+  deleteCardRelation(input: {id: $id}) {
+    cardRelation {
+      id
+    }
+  }
+}`;
+    /**
+     * The endpoint to create a card, in case of success a query is returned. When fields_attributes is passed as parameter, the field_value of first field_attribute replaces the card title.
+     * @function
+     * @param {object} params - The card new data
+     * @param {number} params.id - The child card id
+     * @returns A promise with the response body
+     */
+   /* this has not been added to Pipefy API yet
+    this.deleteCardRelation = async function (id) {
+        return await client.query(DELETE_CARD_RELATION_QUERY, {id:id});
+    };
+    */
+
 
     const UPDATE_CARD_QUERY = `mutation UpdateCard($id: ID!, $assignee_ids: [ID], $due_date: DateTime, $label_ids: [ID], $title: String) {
   updateCard(input: {id: $id, assignee_ids: $assignee_ids, due_date: $due_date, label_ids: $label_ids, title: $title}) {
@@ -1016,6 +1087,622 @@ function Pipefy(config) {
         return await client.query(DELETE_WEBHOOK_QUERY, {id: id});
     };
 
+
+    ///////////////Batch fetching of cards from phases and pipes//////////////////////
+
+    const PHASE_CARDS_QUERY = `query fetchCards($phaseId:ID!, $startCursor:String, $batchSize:Int) {
+      phase(id: $phaseId) {
+        cards_count
+        cards(first:$batchSize, after:$startCursor){
+            edges{
+                node {
+                    id
+                    title
+                }
+            }
+                
+            pageInfo {
+              endCursor
+              hasNextPage
+              hasPreviousPage
+              startCursor
+            }
+        }
+      }
+    }`;
+
+    const MAX_CARD_BATCH_SIZE = 30; // this is the current upper limit set by pipefy per card fetch
+    /**
+     * A helper function to fetch a maximum of 30 cards from a phase starting from a startCursor
+     * @function
+     * @param {string} phaseId - id of the phase from which to get the cards
+     * @param {string=} startCursor  - place to start fetching
+     * @returns {json} - a JSON object with data and next cursor
+     */
+    async function fetchCardBatchFromPhase (phaseId, batchSize, startCursor){
+        const variables = {phaseId:phaseId, batchSize: batchSize};
+
+        if (startCursor){
+            variables.startCursor = startCursor;
+        }
+
+        const results = await client.query(PHASE_CARDS_QUERY, variables);
+        const pageInfo = results.data.phase.cards.pageInfo;
+        return {
+            data: results.data.phase.cards.edges,
+            nextCursor: pageInfo.hasNextPage? pageInfo.endCursor : undefined,
+        }
+    };
+
+
+    /**
+     * A function to get all cards from a phase
+     * @function
+     * @param {string} phaseId - id of the phase from which to get the cards
+     * @param {string=} startCursor  - place to start fetching
+     * @returns {Json} - a JSON object with cards
+     */
+    async function fetchAllCardsFromPhase (phaseId, batchSize, startCursor=undefined){
+        const fragment = await fetchCardBatchFromPhase(phaseId, batchSize, startCursor);
+        if (fragment.nextCursor) {
+            return fragment.data.concat(await fetchAllCardsFromPhase(phaseId, batchSize, fragment.nextCursor));
+        } else {
+            return fragment.data;
+        }
+    };
+
+
+    /**
+     * A function to get all cards from a phase
+     * @function
+     * @param {string} phaseId - id of the phase from which to get the cards
+     * @returns {Json} - a JSON object with cards
+     */
+    this.getAllCardsFromPhase = async function (phaseId, batchSize = MAX_CARD_BATCH_SIZE){
+        return await fetchAllCardsFromPhase(phaseId, batchSize);
+    }
+
+    const PHASE_CARD_COUNT_QUERY = `query fetchPhaseCardCount($phaseId:ID!){
+        phase(id: $phaseId) {
+            cards_count
+        }
+    }`;
+    /**
+     * A function to get all cards from a phase
+     * @function
+     * @param {string} phaseId - id of the phase from which to get the cards
+     * @returns {number} - a count of cards
+     */
+    this.getCardCountFromPhase = async function(phaseId) {
+        var body = await client.query(PHASE_CARD_COUNT_QUERY, {phaseId: phaseId});
+        var count = body.data.phase.cards_count;
+        log.debug("Phase has " + count + " cards")
+        return count;
+    };
+
+
+
+    /////////////////////BATCH FETCHING FROM PIPE//////////////////////////////////////
+
+    const PIPE_CARDS_QUERY = `query fetchCards($pipeId:ID!, $startCursor:String, $batchSize:Int) {
+      allCards(pipeId: $pipeId, first:$batchSize, after:$startCursor) {
+    	edges{
+          node{
+            id
+            title
+            assignees {
+              id
+            }
+            attachments_count
+            checklist_items_checked_count
+            checklist_items_count
+            child_relations {
+              name
+              source_type
+            }
+            comments {
+              id
+              text
+              created_at
+              author_name
+            }
+            comments_count
+            createdAt
+            createdBy {
+              id
+              name
+            }
+            current_phase {
+              id
+              name
+              cards_can_be_moved_to_phases{
+                id
+                name
+              }
+            }
+            labels{
+                id
+                name
+            }
+            current_phase_age
+            done
+            due_date
+            emailMessagingAddress
+            expired
+            fields{
+              name
+              value
+              field{
+                id
+                label
+                type
+                options
+                uuid
+              }
+            }
+          } 
+        }
+    	pageInfo {
+          endCursor
+          hasNextPage
+          hasPreviousPage
+          startCursor
+        }        
+      }
+    }`;
+
+    function logCards(cards){
+        for (var card of cards){
+            console.log(card.node.id)
+        }
+    }
+
+    /**
+     * A helper function to fetch a maximum of 30 cards from a phase starting from a startCursor
+     * @function
+     * @param {string} pipeId - id of the phase from which to get the cards
+     * @param {string=} startCursor  - place to start fetching
+     * @returns {json} - a JSON object with data and next cursor
+     */
+    async function fetchCardBatchFromPipe (pipeId, batchSize, startCursor){
+        const variables = {pipeId:pipeId, batchSize: batchSize};
+
+        if (startCursor){
+            variables.startCursor = startCursor;
+        }
+
+        try {
+            const results = await client.query(PIPE_CARDS_QUERY, variables);
+            const pageInfo = results.data.allCards.pageInfo;
+            return {
+                data: results.data.allCards.edges,
+                nextCursor: pageInfo.hasNextPage? pageInfo.endCursor : undefined,
+            }
+        }catch(err) {
+            console.log(err);
+            throwError("fetchCardBatchFromPipe failed", err);
+        }
+    };
+
+
+
+    /**
+     * A function to get all cards from a pipe
+     * @function
+     * @param {string} pipeId - id of the pipe from which to get the cards
+     * @param {string=} startCursor  - place to start fetching
+     * @returns {Json} - a JSON object with cards
+     */
+    async function fetchAllCardsFromPipe (pipeId, batchSize, startCursor=undefined){
+        const fragment = await fetchCardBatchFromPipe(pipeId, batchSize, startCursor);
+        if (fragment.nextCursor) {
+            return fragment.data.concat(await fetchAllCardsFromPipe(pipeId, batchSize, fragment.nextCursor));
+        } else {
+            return fragment.data;
+        }
+    };
+
+
+    /**
+     * A function to get all cards from a phase
+     * @function
+     * @param {string} pipeId - id of the pipe from which to get the cards
+     * @returns {Json} - a JSON object with cards
+     */
+    this.getAllCardsFromPipe = async function (pipeId, batchSize = MAX_CARD_BATCH_SIZE){
+        try {
+            return await fetchAllCardsFromPipe(pipeId, batchSize);
+        }catch(err){
+            console.log("Error while getting all cards", err);
+        }
+    }
+
+    const PIPE_CARD_COUNT_QUERY = `query fetchPipeCardCount($pipeId:ID!){
+        pipe(id: $pipeId) {
+            cards_count
+        }
+    }`;
+    /**
+     * A function to get all cards from a phase
+     * @function
+     * @param {string} pipeId - id of the pipe from which to get the cards
+     * @returns {number} - a count of cards in the pipe
+     */
+    this.getCardCountFromPipe = async function(pipeId) {
+        var body = await client.query(PIPE_CARD_COUNT_QUERY, {pipeId: pipeId});
+        var count = body.data.pipe.cards_count;
+        log.debug("Pipe has " + count + " cards")
+        return count;
+    };
+
+    /**
+     * A function to get all cards from a phase
+     * @function
+     * @param {string} pipeId - id of the pipe from which to delete the cards
+     * @returns {number}  - A number of deleted cards
+     */
+    this.deleteAllCardsFromPipe = async function(pipeId) {
+        const cards = await this.getAllCardsFromPipe(pipeId);
+        let deleteCount = 0;
+        let card;
+        for (card of cards){
+            await this.deleteCard(card.node.id);
+            deleteCount++;
+        }
+        return deleteCount;
+    };
+
+
+
+    /////////////////////DATABASE FUNCTIONS//////////////////////
+
+
+    const TABLE_RECORDS_QUERY = `query fetchTableRecords($tableId:ID!, $startCursor:String, $batchSize: Int) {
+      table_records(table_id: $tableId, after: $startCursor, first: $batchSize) {
+        matchCount
+        edges {
+          cursor
+          node {
+            id
+            title
+            url
+            record_fields {
+              name
+              value
+              field {
+                id
+              }
+              array_value
+            }
+          }
+        }
+        pageInfo {
+          endCursor
+          hasNextPage
+          hasPreviousPage
+          startCursor
+        }
+      }
+    }`;
+
+    /**
+     * A helper function to fetch a maximum of 30 cards from a phase starting from a startCursor
+     * @function
+     * @param {string} tableId - id of the phase from which to get the cards
+     * @param {string=} startCursor  - place to start fetching
+     * @returns {json} - a JSON object with data and next cursor
+     */
+    async function fetchRecordBatchFromTable (tableId, batchSize, startCursor){
+        const variables = {tableId:tableId, batchSize: batchSize};
+
+        if (startCursor){
+            variables.startCursor = startCursor;
+        }
+
+        const results = await client.query(TABLE_RECORDS_QUERY, variables);
+
+        const pageInfo = results.data.table_records.pageInfo;
+        return {
+            data: results.data.table_records.edges,
+            nextCursor: pageInfo.hasNextPage? pageInfo.endCursor : undefined,
+        }
+    };
+
+
+    /**
+     * A function to get all cards from a pipe
+     * @function
+     * @param {string} tableId - id of the pipe from which to get the cards
+     * @param {string=} startCursor  - place to start fetching
+     * @returns {Json} - a JSON object with cards
+     */
+    async function fetchAllRecordsFromTable (tableId, batchSize, startCursor=undefined){
+        const fragment = await fetchRecordBatchFromTable(tableId, batchSize, startCursor);
+        if (fragment.nextCursor) {
+            return fragment.data.concat(await fetchAllRecordsFromTable(tableId, batchSize, fragment.nextCursor));
+        } else {
+            return fragment.data;
+        }
+    };
+
+    const MAX_RECORD_BATCH_SIZE = 50;
+
+    /**
+     * A function to get all records from a table
+     * @function
+     * @param {string} tableId - id of the pipe from which to get the cards
+     * @param {number=} batchSize - how many records to fetch at a time, default is maxiumum (50 currently)
+     * @returns {Array.object} - an array of table records
+     */
+    this.getTableRecords = async function (tableId, batchSize = MAX_RECORD_BATCH_SIZE){
+        return await fetchAllRecordsFromTable(tableId, batchSize);
+    };
+
+
+    const DELETE_RECORD_QUERY = `mutation DeleteTableRecord($id: ID!) {
+  deleteTableRecord(input: {id: $id}) {
+    success
+  }
+}`;
+
+    /**
+     * A function to get all records from a table
+     * @function
+     * @param {string} recordId - id of the pipe from which to get the cards
+     * @returns promise
+     */
+    this.deleteRecord = async function (recordId){
+        return await client.query(DELETE_RECORD_QUERY, {id:recordId});
+    };
+
+    /**
+     * A function to get all records from a table
+     * @function
+     * @param {string} tableId - id of the pipe from which to get the cards
+     * @param {Array.number=} selectedRecords - Array of ids of records to delete, if empty, this function will delete all records
+     * @returns {number} - count of records deleted
+     */
+    this.deleteRecords = async function (tableId, selectedRecords=undefined){
+        const records = await fetchAllRecordsFromTable(tableId, MAX_RECORD_BATCH_SIZE);
+        let deleteCount = 0;
+
+        for (var r of records){
+            if (!selectedRecords || (selectedRecords && selectedRecords.includes(r.node.id))){
+                const status = await this.deleteRecord(r.node.id);
+                deleteCount++;
+            }
+        }
+        return deleteCount;
+    };
+
+
+    const DELETE_TABLE_QUERY = `mutation DeleteTable($id: ID!) {
+  deleteTable(input: {id: $id}) {
+    success
+  }
+}`;
+    /**
+     * A function to get all records from a table
+     * @function
+     * @param {string} tableId - id of the pipe from which to get the cards
+     * @returns A promise with the response body
+     */
+    this.deleteTable = async function (id){
+        return await client.query(DELETE_TABLE_QUERY, {id: id});
+    };
+
+
+    const CREATE_TABLE_QUERY = `mutation CreateTable($name: String!, $organization_id: ID!, $labels: [LabelInput], $public:Boolean, $description: String, $authorization: TableAuthorization, $members: [MemberInput]) {
+  createTable(
+    input: {
+      organization_id: $organization_id
+      name: $name
+      description: $description
+      public: $public
+      authorization: $authorization
+      labels:$labels
+      members:$members
+    }
+  ) {
+    table {
+      id
+      name
+      description
+      public
+      authorization
+    }
+  }
+}`;
+
+    /**
+     * A function to get all records from a table
+     * @function
+     * @param {Object} params
+     * @param {string} params.name - Name of the table
+     * @param {number} params.organization_id - Id of the organization
+     * @param {string} params.authorization - valid options are read, write
+     * @param {string} params.description  - description of the table
+     * @param {Array.LabelInput} params.labels - Array of labels to use for the records {name:labelName, color:HEX}
+     * @param {Array.MemberInput} params.members - Array of user members
+     * @param {boolean} params.public  - Wheter the table is public
+     *
+     * @returns {number} - count of records deleted
+     *
+     * organization_id: ID!
+     */
+    this.createTable = async function (params, fieldParams=undefined){
+        return await client.query(CREATE_TABLE_QUERY, params);
+    };
+
+    const CREATE_TABLE_FIELD_QUERY = `mutation CreateTableField($table_id: ID!, $type: ID!, $label: String!, $options: [String], $description: String, $help: String, $required: Boolean, $minimal_view: Boolean, $custom_validation: String) {
+  createTableField(input: {table_id: $table_id, type: $type, label: $label, options: $options, description: $description, help: $help, required: $required, minimal_view: $minimal_view, custom_validation: $custom_validation}) {
+    table_field {
+      id
+      label
+      type
+      options
+      description
+      help
+      required
+      minimal_view
+      custom_validation
+    }
+  }
+}`;
+
+    /**
+     * A function to get all records from a table
+     * @function
+     * @param {Object} params - configurations for the new field
+     * @param {string} params.tableId - id of the pipe from which to get the cards
+     * @param {string} params.type - field type
+     * @param {string} params.label - label to use for the field
+     * @param {string} params.options - field options
+     * @param {string} params.description - field description
+     * @param {string} params.help - help text
+     * @param {boolean} params.required - specifies is the field required
+     * @param {boolean} params.minimal_view - specifies how the field is displayed on a form
+     * @param {string} params.custom_validation - validation rules for the field value
+     * @returns Promise
+     */
+    this.createTableField = async function(params){
+        return await client.query(CREATE_TABLE_FIELD_QUERY, params);
+    };
+
+    /**
+     * A function to get all records from a table
+     * @function
+     * @param {string} - table_id
+     * @param {Array.Object} params - configurations for the new field
+     * @param {string} params.tableId - id of the pipe from which to get the cards
+     * @param {string} params.type - field type
+     * @param {string} params.label - label to use for the field
+     * @param {string} params.options - field options
+     * @param {string} params.description - field description
+     * @param {string} params.help - help text
+     * @param {boolean} params.required - specifies is the field required
+     * @param {boolean} params.minimal_view - specifies how the field is displayed on a form
+     * @param {string} params.custom_validation - validation rules for the field value
+     * @returns {Array.string} - array of field ids.
+     */
+    this.createTableFields = async function(table_id, params){
+        let count = 0;
+        let field_ids = [params.length];
+        for (let i=0; i< params.length; i++) {
+            const result = await client.query(CREATE_TABLE_FIELD_QUERY, params[i]);
+            field_ids[i] = result.data.createTableField.table_field.id;
+            count++
+        }
+
+        return field_ids;
+    };
+
+
+    const CREATE_TABLE_RECORD_QUERY = `mutation CreateTableRecord ($table_id: ID!, $title:String!, $due_date:DateTime, $fields_attributes:[FieldValueInput],$label_ids:[ID], $assignee_ids:[ID]){
+  createTableRecord(
+    input: {
+      table_id: $table_id
+      title: $title
+      due_date: $due_date
+      fields_attributes: $fields_attributes
+      label_ids: $label_ids
+      assignee_ids: $assignee_ids
+    }
+  ) {
+    table_record {
+      id
+      title
+      due_date
+      record_fields {
+        name
+        value
+      }
+    }
+  }
+}`;
+    /**
+     * A function to get all records from a table
+     * @function
+     * @param {Array.Object} params - configurations for the new field
+     * @param {string} params.table_id - id of the pipe from which to get the cards
+     * @param {string} params.title - record title
+     * @param {string} params.due_date - if the record has a due date
+     * @param {Array.FieldInput} params.fields_attributes - field values
+     * @param {Array.number} params.label_ids - any labels that should be applied to the record
+     * @returns {Object} - record values
+     */
+
+    this.createTableRecord = async function(params){
+        return await client.query(CREATE_TABLE_RECORD_QUERY,params);
+    };
+
+    const TABLE_RECORDS_COUNT_QUERY = `query fetchTableRecordCount($tableId:ID!){
+    table(id: $tableId) {
+     table_records_count
+        }
+    }`;
+    /**
+     * A function to get all records from a table
+     * @function
+     * @param {number} table_id - id of the table
+     * @returns {number} - count of records
+     */
+    this.getTableRecordsCount = async function(tableId){
+        return await client.query(TABLE_RECORDS_COUNT_QUERY,{tableId:tableId});
+    };
+
+    const UPDATE_TABLE_FIELD_QUERY = `mutation ($recordId: ID!, $fieldId: ID!, $newValue: [UndefinedInput]) {
+      setTableRecordFieldValue(
+        input: {
+          table_record_id: $recordId
+          field_id: $fieldId
+          value: $newValue
+        })
+      {
+        table_record {
+          id
+          title
+        }
+        table_record_field {
+          value
+        }
+      }
+    }`;
+    /**
+     * A function to get all records from a table
+     * @function
+     * @param {Object} params - parameters for update
+     * @param {number} params.recordId - id of the record to update
+     * @param {string} params.fieldId - id of the field to update
+     * @param {UndefinedInput} params.newValue - new value
+     * @returns promise
+     */
+    this.updateTableField = async function(params){
+        return await client.query(UPDATE_TABLE_FIELD_QUERY,params);
+    };
+
+
+
+    const CLONE_CARD_QUERY = `mutation CreateCard($pipe_id: ID!, $assignee_ids: [ID], $attachments: [String], $due_date: DateTime, $fields_attributes: [FieldValueInput], $label_ids: [ID], $parent_ids: [ID], $phase_id: ID, $title: String) {
+  createCard(input: {pipe_id: $pipe_id, phase_id: $phase_id, parent_ids: $parent_ids, assignee_ids: $assignee_ids, attachments: $attachments, due_date: $due_date, fields_attributes: $fields_attributes, label_ids: $label_ids, title: $title}) {
+    card {
+      id
+      title
+    }
+  }
+}`;
+
+    //functions that are not api based
+    this.cloneCard = async function(id){
+        const result = await this.getCardById(id);
+        if (result && result.data.card.node.id){
+            const card = result.data.card.node;
+            const newCardParams = {pipe_id:card.pipe_id,assignee_ids:card.assignee_ids,attachments:card.attachments,due_date:card.due_date,fields_attributes:card.fields_attributes, label_ids:card.label_ids,phase_id:card.phase_id, title:card.title}
+            await this.createCard(newCardParams);
+        }else{
+            throwError("Card does not exist");
+        }
+    }
 }
 
 module.exports = function (config) {
