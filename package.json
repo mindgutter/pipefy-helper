@@ -1,23 +1,23 @@
 {
   "name": "pipefy-helper",
-  "version": "1.0.0",
-  "description": "An Pipefy GraphQL API wrapper using node.js",
+  "version": "1.0.3",
+  "description": "Pipefy GraphQL API wrapper using node.js",
   "main": "index.js",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mindgutter/pipefy-helper.git"
+    "url": "git+https://github.ibm.com/Michael-Galkovsky/pipefy-helper.git"
   },
   "keywords": [
     "nodejs",
     "pipefy",
     "graphql"
   ],
-  "author": "Michael Galkovsky <mgalkovsky@gmail.com> (https://github.com/mindgutter)",
+  "author": "Michael Galkovsky <michael.galkovsky@be.ibm.com> (https://github.ibm.com/Michael-Galkovsky)",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/mindgutter/pipefy-helper/issues"
+    "url": "https://github.ibm.com/Michael-Galkovsky/pipefy-helper/issues"
   },
-  "homepage": "https://github.com/mindgutter/pipefy-helper#readme",
+  "homepage": "https://github.ibm.com/Michael-Galkovsky/pipefy-helper#readme",
   "devDependencies": {
     "chai": "^3.5.0",
     "coveralls": "^2.13.1",
@@ -25,12 +25,19 @@
     "mocha": "^3.4.1",
     "random-word": "^2.0.0",
     "fuse-js-latest": "^3.1.0",
-    "parse-full-name": "^1.2.3"
+    "parse-full-name": "^1.2.3",
+    "xlsx": "^0.13.0",
+    "cli-progress": "^2.0.0",
+    "fs": "0.0.1-security",
+    "fuse": "^0.4.0"
   },
   "dependencies": {
+    "graphql-client": "^2.0.1",
     "loglevel": "^1.4.1",
+    "mime-types": "^2.1.20",
     "request": "^2.81.0",
-    "graphql-client": "^2.0.1"
+    "url": "^0.11.0",
+    "csv-writer": "^1.2.0"
   },
   "scripts": {
     "test": "mocha --timeout 300000 --reporter spec ",
